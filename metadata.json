@@ -1,0 +1,5 @@
+{
+  "name": "Excel Insight Agent",
+  "description": "An intelligent agent that compares two Excel or CSV files, highlights structural and data differences, and provides an AI-powered analysis of the changes.",
+  "requestFramePermissions": []
+}
