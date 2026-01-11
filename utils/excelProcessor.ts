@@ -23,18 +23,45 @@ export const parseFile = async (file: File): Promise<{ data: any[], headers: str
   });
 };
 
+const getNumericValue = (row: any): number => {
+  const keys = Object.keys(row);
+  // Priority order for financial columns
+  const financialKeys = ['amount', 'total', 'balance', 'price', 'paid', 'invoice_amount', 'sum'];
+  
+  for (const fKey of financialKeys) {
+    const found = keys.find(k => k.toLowerCase().includes(fKey));
+    if (found) {
+      const val = parseFloat(row[found]);
+      if (!isNaN(val)) return val;
+    }
+  }
+  return 0;
+};
+
 export const compareDatasets = (dataA: any[], dataB: any[], headers: string[]): ComparisonResult => {
   const added: any[] = [];
   const removed: any[] = [];
   const modified: ModifiedRow[] = [];
+  
+  let totalAmountA = 0;
+  let totalAmountB = 0;
 
-  const findId = (obj: any) => obj.id || obj.ID || obj.email || obj.Email || obj.code || obj.Code;
+  const findId = (obj: any) => 
+    obj.invoice_no || obj.Invoice || obj.PO || obj.reference || obj.id || obj.ID || obj.email || obj.Reference;
 
   const mapA = new Map();
-  dataA.forEach((row, idx) => mapA.set(findId(row) ?? idx, row));
+  dataA.forEach((row, idx) => {
+    const id = findId(row) ?? `idx_${idx}`;
+    mapA.set(id, row);
+    totalAmountA += getNumericValue(row);
+  });
 
   const mapB = new Map();
-  dataB.forEach((row, idx) => mapB.set(findId(row) ?? idx, row));
+  dataB.forEach((row, idx) => {
+    const id = findId(row) ?? `idx_${idx}`;
+    mapB.set(id, row);
+    totalAmountB += getNumericValue(row);
+  });
 
   mapB.forEach((rowB, id) => {
     if (!mapA.has(id)) {
@@ -75,7 +102,10 @@ export const compareDatasets = (dataA: any[], dataB: any[], headers: string[]): 
       totalB: dataB.length,
       addedCount: added.length,
       removedCount: removed.length,
-      modifiedCount: modified.length
+      modifiedCount: modified.length,
+      totalAmountA,
+      totalAmountB,
+      variance: totalAmountB - totalAmountA
     }
   };
 };
@@ -83,26 +113,25 @@ export const compareDatasets = (dataA: any[], dataB: any[], headers: string[]): 
 export const exportToExcel = (result: ComparisonResult, fileName: string) => {
   const wb = XLSX.utils.book_new();
 
-  // Prepare Modified data for export
   const flattenedModified = result.modified.map(m => {
     const changeLog = m.changes.map(c => `${c.column}: ${c.from} -> ${c.to}`).join('; ');
-    return { ...m.row, _CHANGES: changeLog };
+    return { ...m.row, _RECONCILIATION_LOG: changeLog };
   });
 
   if (result.added.length > 0) {
     const wsAdded = XLSX.utils.json_to_sheet(result.added);
-    XLSX.utils.book_append_sheet(wb, wsAdded, "Added Rows");
+    XLSX.utils.book_append_sheet(wb, wsAdded, "New Transactions");
   }
 
   if (result.removed.length > 0) {
     const wsRemoved = XLSX.utils.json_to_sheet(result.removed);
-    XLSX.utils.book_append_sheet(wb, wsRemoved, "Removed Rows");
+    XLSX.utils.book_append_sheet(wb, wsRemoved, "Missing in Actuals");
   }
 
   if (flattenedModified.length > 0) {
     const wsModified = XLSX.utils.json_to_sheet(flattenedModified);
-    XLSX.utils.book_append_sheet(wb, wsModified, "Modified Rows");
+    XLSX.utils.book_append_sheet(wb, wsModified, "Price_Amount Mismatches");
   }
 
-  XLSX.writeFile(wb, `Comparison_Report_${fileName}.xlsx`);
+  XLSX.writeFile(wb, `Audit_Report_${fileName}.xlsx`);
 };

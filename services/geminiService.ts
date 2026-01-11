@@ -10,25 +10,34 @@ export const analyzeComparison = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const prompt = `
-    Analyze the differences between two datasets: "${fileNameA}" (Base) and "${fileNameB}" (Comparison).
+    You are a Senior Financial Auditor. Analyze the reconciliation between two files: 
+    File A (Base): "${fileNameA}" and File B (Actuals): "${fileNameB}".
+
+    Financial Summary:
+    - Total Balance in Base: ${result.summary.totalAmountA.toFixed(2)}
+    - Total Balance in Actuals: ${result.summary.totalAmountB.toFixed(2)}
+    - Net Variance: ${result.summary.variance.toFixed(2)}
     
-    Summary of changes:
-    - Original row count: ${result.summary.totalA}
-    - New row count: ${result.summary.totalB}
-    - Rows added: ${result.summary.addedCount}
-    - Rows removed: ${result.summary.removedCount}
-    - Rows modified: ${result.summary.modifiedCount}
+    Change Details:
+    - New records (Purchases/Payments): ${result.summary.addedCount}
+    - Missing records: ${result.summary.removedCount}
+    - Modified records (Amount/Date changes): ${result.summary.modifiedCount}
 
-    Structural data:
-    - Headers: ${result.headers.join(", ")}
+    Headers detected: ${result.headers.join(", ")}
 
-    Sample of modified rows (first 5):
-    ${JSON.stringify(result.modified.slice(0, 5), null, 2)}
+    Sample Data of Modified Transactions:
+    ${JSON.stringify(result.modified.slice(0, 10), null, 2)}
 
-    Sample of added rows (first 5):
-    ${JSON.stringify(result.added.slice(0, 5), null, 2)}
+    Sample Data of New Transactions:
+    ${JSON.stringify(result.added.slice(0, 10), null, 2)}
 
-    Task: Provide a high-level executive summary, key insights, potential anomalies found in the changes, and actionable recommendations.
+    TASK:
+    1. Identify the primary root causes for the balance variance (e.g., specific missing payments, pricing mismatches, or duplicate invoices).
+    2. Determine a Reconciliation Status.
+    3. List specific anomalies that look like errors (e.g., negative amounts, extreme outliers).
+    4. Suggest actionable steps to balance the books.
+
+    Return the analysis in structured JSON.
   `;
 
   const response = await ai.models.generateContent({
@@ -39,24 +48,28 @@ export const analyzeComparison = async (
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          overview: { type: Type.STRING, description: "A summary of the differences." },
-          keyInsights: { 
+          overview: { type: Type.STRING, description: "Executive summary of the reconciliation." },
+          reconciliationStatus: { 
+            type: Type.STRING, 
+            enum: ['Balanced', 'Discrepancy Found', 'Critical Mismatch'] 
+          },
+          rootCauses: { 
             type: Type.ARRAY, 
             items: { type: Type.STRING },
-            description: "List of significant findings."
+            description: "Bullet points explaining why the balances don't match."
           },
           anomalies: { 
             type: Type.ARRAY, 
             items: { type: Type.STRING },
-            description: "Any suspicious or unexpected changes."
+            description: "Suspicious data points or accounting errors."
           },
           recommendations: { 
             type: Type.ARRAY, 
             items: { type: Type.STRING },
-            description: "Actionable next steps based on the comparison."
+            description: "How to fix the identified issues."
           }
         },
-        required: ["overview", "keyInsights", "anomalies", "recommendations"]
+        required: ["overview", "reconciliationStatus", "rootCauses", "anomalies", "recommendations"]
       }
     }
   });
@@ -64,7 +77,7 @@ export const analyzeComparison = async (
   try {
     return JSON.parse(response.text || "{}") as AIAnalysis;
   } catch (error) {
-    console.error("Failed to parse Gemini response:", error);
-    throw new Error("Invalid AI analysis format");
+    console.error("Failed to parse financial analysis:", error);
+    throw new Error("Invalid financial audit format");
   }
 };

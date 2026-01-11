@@ -10,6 +10,9 @@ export interface ComparisonResult {
     addedCount: number;
     removedCount: number;
     modifiedCount: number;
+    totalAmountA: number;
+    totalAmountB: number;
+    variance: number;
   };
 }
 
@@ -30,7 +33,8 @@ export interface FileData {
 
 export interface AIAnalysis {
   overview: string;
-  keyInsights: string[];
+  rootCauses: string[];
+  reconciliationStatus: 'Balanced' | 'Discrepancy Found' | 'Critical Mismatch';
   anomalies: string[];
   recommendations: string[];
 }
